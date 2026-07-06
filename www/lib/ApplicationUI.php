@@ -42,7 +42,7 @@ class ApplicationUI {
     private static function mainMenuItems(): array {
         return [
             ['path' => '/index.php', 'label' => 'Home'],
-            ['path' => '/upcoming_tasks.php', 'label' => 'Upcoming Tasks'],
+            ['path' => '/obligations/', 'label' => 'Recurring Obligations'],
             ['path' => '/assets/', 'label' => 'Household Assets'],
             ['path' => '/documents/', 'label' => 'Document Vault'],
             ['path' => '/contacts/', 'label' => 'Contacts'],

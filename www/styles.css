@@ -484,6 +484,21 @@ button:disabled {
 }
 
 /* Status indicators */
+.due-overdue {
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.due-today {
+  color: #b45309;
+  font-weight: 600;
+}
+
+.due-soon {
+  color: #1d4ed8;
+  font-weight: 500;
+}
+
 .status-verified {
   color: #28a745;
   font-weight: 500;

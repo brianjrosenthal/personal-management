@@ -12,7 +12,9 @@ final class InsurancePolicyManagementTest extends TestCase
     protected function setUp(): void
     {
         test_reset_users();
+        pdo()->exec('SET FOREIGN_KEY_CHECKS=0');
         pdo()->exec('TRUNCATE TABLE insurance_policies');
+        pdo()->exec('SET FOREIGN_KEY_CHECKS=1');
 
         pdo()->exec("INSERT INTO users (first_name, last_name, email, password_hash, email_verified_at)
                      VALUES ('Test', 'User', 'test@example.com', 'hash', NOW())");

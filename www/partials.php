@@ -15,3 +15,25 @@ function header_html(string $title): void {
 function footer_html(): void {
     ApplicationUI::footerHtml();
 }
+
+// Shared presentation for an obligation's due date: "3 days overdue" /
+// "Due today" / "Due in 5 days" / "Due Mar 15, 2027", colored appropriately.
+function obligation_due_html(?string $nextDueOn, ?string $today = null): string {
+    if (!$nextDueOn) return '<span class="small">—</span>';
+    $today = $today ?? date('Y-m-d');
+
+    $days = (int)round(((new DateTimeImmutable($nextDueOn))->getTimestamp() - (new DateTimeImmutable($today))->getTimestamp()) / 86400);
+    $dateLabel = date('M j, Y', strtotime($nextDueOn));
+
+    if ($days < 0) {
+        $n = -$days;
+        return '<span class="due-overdue">' . $n . ' day' . ($n === 1 ? '' : 's') . ' overdue</span> <span class="small">(' . h($dateLabel) . ')</span>';
+    }
+    if ($days === 0) {
+        return '<span class="due-today">Due today</span>';
+    }
+    if ($days <= 30) {
+        return '<span class="due-soon">Due in ' . $days . ' day' . ($days === 1 ? '' : 's') . '</span> <span class="small">(' . h($dateLabel) . ')</span>';
+    }
+    return 'Due ' . h($dateLabel);
+}
