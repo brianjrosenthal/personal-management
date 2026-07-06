@@ -1,4 +1,4 @@
-// RAG Application JavaScript
+// Family Office application JavaScript
 
 // Utility functions
 function escapeHtml(text) {
