@@ -43,6 +43,10 @@ class ApplicationUI {
         return [
             ['path' => '/index.php', 'label' => 'Home'],
             ['path' => '/upcoming_tasks.php', 'label' => 'Upcoming Tasks'],
+            ['path' => '/assets/', 'label' => 'Household Assets'],
+            ['path' => '/documents/', 'label' => 'Document Vault'],
+            ['path' => '/contacts/', 'label' => 'Contacts'],
+            ['path' => '/insurance/', 'label' => 'Insurance Policies'],
         ];
     }
 
@@ -80,10 +84,15 @@ class ApplicationUI {
             echo '<aside class="sidebar" id="sidebar">';
             echo '<div class="sidebar-title"><a href="/index.php">'.h($siteTitle).'</a></div>';
 
-            // Main menu (scrollable middle section)
+            // Main menu (scrollable middle section). Directory items ("/assets/")
+            // are active for every page inside them; file items match exactly.
             echo '<nav class="sidebar-nav">';
             foreach (self::mainMenuItems() as $item) {
-                $active = ($cur === basename($item['path']));
+                if (substr($item['path'], -1) === '/') {
+                    $active = strpos($script, $item['path']) === 0;
+                } else {
+                    $active = ($script === $item['path']);
+                }
                 echo '<a href="'.h($item['path']).'" class="sidebar-item'.($active ? ' active' : '').'">'.h($item['label']).'</a>';
             }
             echo '</nav>';

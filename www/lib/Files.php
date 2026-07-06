@@ -196,6 +196,47 @@ final class Files {
     return (int)pdo()->lastInsertId();
   }
 
+  // ===== Private files (Document Vault) =====
+  // Served ONLY through a login-checked endpoint; never written to the disk cache.
+
+  // Insert a private file row and return the new id
+  public static function insertPrivateFile(string $data, ?string $contentType, ?string $originalFilename, ?int $createdByUserId): int {
+    $sha = hash('sha256', $data);
+    $len = strlen($data);
+    $st = pdo()->prepare("
+      INSERT INTO private_files (data, content_type, original_filename, byte_length, sha256, created_by_user_id, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, NOW())
+    ");
+    $st->execute([$data, $contentType, $originalFilename, $len, $sha, $createdByUserId]);
+    return (int)pdo()->lastInsertId();
+  }
+
+  // Metadata only (no blob) — for listings
+  public static function getPrivateFileMeta(int $id): ?array {
+    if ($id <= 0) return null;
+    $st = pdo()->prepare("SELECT id, content_type, original_filename, byte_length, sha256, created_by_user_id, created_at FROM private_files WHERE id = ? LIMIT 1");
+    $st->execute([$id]);
+    $row = $st->fetch();
+    return $row ?: null;
+  }
+
+  // Full row including blob — the caller MUST have verified login already
+  public static function getPrivateFileForDownload(int $id): ?array {
+    if ($id <= 0) return null;
+    $st = pdo()->prepare("SELECT data, content_type, original_filename, byte_length FROM private_files WHERE id = ? LIMIT 1");
+    $st->execute([$id]);
+    $row = $st->fetch();
+    return $row ?: null;
+  }
+
+  // Delete a private file's bytes (used when a vault document is deleted —
+  // sensitive content should not linger as an orphaned row)
+  public static function deletePrivateFile(int $id): bool {
+    if ($id <= 0) return false;
+    $st = pdo()->prepare("DELETE FROM private_files WHERE id = ?");
+    return $st->execute([$id]);
+  }
+
   // ===== Public cache helpers =====
 
   // Filesystem base for public cache (web-accessible). Example: /path/to/project/cache/public
