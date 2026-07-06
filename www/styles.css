@@ -14,7 +14,8 @@
   --color-sidebar-top: #1e1b4b;
   --color-sidebar-bottom: #0f172a;
   --color-sidebar-text: #e5e7f2;
-  --sidebar-width: 240px;
+  --sidebar-width: 156px;
+  --admin-submenu-width: 184px;
   --mobile-topbar-height: 52px;
 }
 
@@ -46,9 +47,10 @@ body {
 }
 
 .sidebar-title {
-  padding: 18px 16px 14px;
-  font-size: 18px;
+  padding: 16px 12px 12px;
+  font-size: 15px;
   font-weight: 700;
+  line-height: 1.3;
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
 }
 
@@ -70,12 +72,12 @@ body {
 .sidebar-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
+  gap: 8px;
+  padding: 9px 10px;
   border-radius: 8px;
   color: var(--color-sidebar-text);
   text-decoration: none;
-  font-size: 15px;
+  font-size: 14px;
   background: none;
   border: 0;
   width: 100%;
@@ -133,11 +135,6 @@ body {
   font-size: 13px;
 }
 
-.sidebar-profile-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
 /* Pop-up menus opening upward from the bottom anchors */
 .popup-menu {
@@ -167,12 +164,44 @@ body {
   background: #f5f5f7;
 }
 
-/* Admin submenu: on desktop it opens as a vertical panel to the RIGHT of the
-   sidebar, aligned with the Admin item (overridden to an inline accordion on
-   mobile in the media query below). */
+/* Admin submenu: on desktop it is a persistent full-height rail to the RIGHT
+   of the sidebar so users can navigate between admin sections (overridden to
+   an inline accordion on mobile in the media query below). */
 .popup-menu.admin-submenu {
+  position: fixed;
+  top: 0;
   bottom: 0;
-  left: calc(100% + 10px);
+  left: var(--sidebar-width);
+  width: var(--admin-submenu-width);
+  border: 0;
+  border-right: 1px solid var(--color-border);
+  border-radius: 0;
+  box-shadow: 4px 0 16px rgba(0, 0, 0, 0.06);
+  padding: 10px 8px;
+  min-width: 0;
+  z-index: 1190;
+}
+
+.admin-submenu-title {
+  padding: 8px 10px 10px;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+
+.popup-menu.admin-submenu a.active {
+  background: #eef2ff;
+  font-weight: 600;
+  box-shadow: inset 3px 0 0 var(--color-accent);
+}
+
+/* Shift the page content over while the admin rail is open (desktop only) */
+@media (min-width: 769px) {
+  body.admin-submenu-open .content {
+    margin-left: calc(var(--sidebar-width) + var(--admin-submenu-width));
+  }
 }
 
 /* Content area to the right of the sidebar */
@@ -567,6 +596,7 @@ details summary {
   }
 
   .sidebar {
+    width: 240px;
     transform: translateX(-100%);
     transition: transform 0.2s ease;
     box-shadow: 0 0 24px rgba(0, 0, 0, 0.35);
@@ -589,12 +619,22 @@ details summary {
      is anchored, so expanding the menu pushes the Admin item up. */
   .popup-menu.admin-submenu {
     position: static;
+    width: auto;
     background: transparent;
     border: 0;
     box-shadow: none;
     border-radius: 0;
     min-width: 0;
     padding: 2px 0 4px 26px;
+  }
+
+  .admin-submenu-title {
+    display: none;
+  }
+
+  .popup-menu.admin-submenu a.active {
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
   }
 
   .popup-menu.admin-submenu a {

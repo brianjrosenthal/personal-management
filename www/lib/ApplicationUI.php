@@ -54,13 +54,18 @@ class ApplicationUI {
      */
     public static function headerHtml(string $title): void {
         $u = current_user();
-        $cur = basename($_SERVER['SCRIPT_NAME'] ?? '');
+        $script = $_SERVER['SCRIPT_NAME'] ?? '';
+        $cur = basename($script);
         $siteTitle = Settings::siteTitle();
+
+        // On admin pages the admin submenu renders open (desktop keeps it as a
+        // persistent rail so users can navigate between admin sections).
+        $inAdminSection = !empty($u['is_admin']) && strpos($script, '/admin/') === 0;
 
         echo '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">';
         echo '<title>'.h($title).' - '.h($siteTitle).'</title>';
         echo self::cssLink('/styles.css');
-        echo '</head><body>';
+        echo '</head><body'.($inAdminSection ? ' class="admin-submenu-open"' : '').'>';
 
         if ($u) {
             // Mobile top bar: menu icon + site title
@@ -87,15 +92,24 @@ class ApplicationUI {
             echo '<div class="sidebar-bottom">';
 
             if (!empty($u['is_admin'])) {
+                $adminItems = [
+                    ['path' => '/admin/users.php', 'label' => 'Users'],
+                    ['path' => '/admin/settings.php', 'label' => 'Settings'],
+                    ['path' => '/admin/activity_log.php', 'label' => 'Activity Log'],
+                    ['path' => '/admin/email_log.php', 'label' => 'Email Log'],
+                ];
+                $adminLinks = '';
+                foreach ($adminItems as $item) {
+                    $active = $inAdminSection && ($cur === basename($item['path']));
+                    $adminLinks .= '<a href="'.h($item['path']).'" role="menuitem"'.($active ? ' class="active"' : '').'>'.h($item['label']).'</a>';
+                }
                 echo '<div class="sidebar-menu-wrap">'
-                   . '<button type="button" id="adminToggle" class="sidebar-item sidebar-menu-toggle" aria-expanded="false" aria-controls="adminMenu">'
+                   . '<button type="button" id="adminToggle" class="sidebar-item sidebar-menu-toggle" aria-expanded="'.($inAdminSection ? 'true' : 'false').'" aria-controls="adminMenu">'
                    . '<span class="sidebar-item-icon" aria-hidden="true">&#9881;</span> Admin'
                    . '</button>'
-                   . '<div id="adminMenu" class="popup-menu admin-submenu hidden" role="menu" aria-hidden="true">'
-                   .   '<a href="/admin/users.php" role="menuitem">Users</a>'
-                   .   '<a href="/admin/settings.php" role="menuitem">Settings</a>'
-                   .   '<a href="/admin/activity_log.php" role="menuitem">Activity Log</a>'
-                   .   '<a href="/admin/email_log.php" role="menuitem">Email Log</a>'
+                   . '<div id="adminMenu" class="popup-menu admin-submenu'.($inAdminSection ? '' : ' hidden').'" role="menu" aria-hidden="'.($inAdminSection ? 'false' : 'true').'">'
+                   .   '<div class="admin-submenu-title">Admin</div>'
+                   .   $adminLinks
                    . '</div>'
                    . '</div>';
             }
@@ -111,9 +125,8 @@ class ApplicationUI {
             }
 
             echo '<div class="sidebar-menu-wrap">'
-               . '<button type="button" id="profileToggle" class="sidebar-item sidebar-menu-toggle sidebar-profile" aria-expanded="false" aria-controls="profileMenu" title="Account">'
+               . '<button type="button" id="profileToggle" class="sidebar-item sidebar-menu-toggle sidebar-profile" aria-expanded="false" aria-controls="profileMenu" title="'.h($name).'" aria-label="Account menu for '.h($name).'">'
                . $avatar
-               . '<span class="sidebar-profile-name">'.h($name).'</span>'
                . '</button>'
                . '<div id="profileMenu" class="popup-menu hidden" role="menu" aria-hidden="true">'
                .   '<a href="/profile/" role="menuitem">My Profile</a>'
@@ -125,20 +138,33 @@ class ApplicationUI {
             echo '</div>'; // .sidebar-bottom
             echo '</aside>';
 
-            // Sidebar behavior: mobile drawer + bottom popup menus
+            // Sidebar behavior: mobile drawer, persistent admin rail (desktop) /
+            // accordion (mobile), and the profile popup menu.
             echo '<script>document.addEventListener("DOMContentLoaded",function(){'
                . 'var sidebar=document.getElementById("sidebar");'
                . 'var toggle=document.getElementById("sidebarToggle");'
                . 'var backdrop=document.getElementById("sidebarBackdrop");'
+               . 'function isDesktop(){return window.matchMedia("(min-width: 769px)").matches;}'
                . 'function closeSidebar(){sidebar.classList.remove("open");backdrop.classList.remove("show");if(toggle)toggle.setAttribute("aria-expanded","false");}'
                . 'function openSidebar(){sidebar.classList.add("open");backdrop.classList.add("show");if(toggle)toggle.setAttribute("aria-expanded","true");}'
                . 'if(toggle){toggle.addEventListener("click",function(){sidebar.classList.contains("open")?closeSidebar():openSidebar();});}'
                . 'if(backdrop){backdrop.addEventListener("click",closeSidebar);}'
-               . 'var wraps=Array.prototype.slice.call(document.querySelectorAll(".sidebar .sidebar-menu-wrap"));'
-               . 'function closeMenus(){wraps.forEach(function(w){var m=w.querySelector(".popup-menu");var b=w.querySelector(".sidebar-menu-toggle");if(m){m.classList.add("hidden");m.setAttribute("aria-hidden","true");}if(b){b.setAttribute("aria-expanded","false");}});}'
-               . 'wraps.forEach(function(w){var m=w.querySelector(".popup-menu");var b=w.querySelector(".sidebar-menu-toggle");if(!m||!b)return;b.addEventListener("click",function(e){e.preventDefault();var isHidden=m.classList.contains("hidden");closeMenus();if(isHidden){m.classList.remove("hidden");m.setAttribute("aria-hidden","false");b.setAttribute("aria-expanded","true");}});});'
-               . 'document.addEventListener("click",function(e){var inWrap=wraps.some(function(w){return w.contains(e.target);});if(!inWrap)closeMenus();});'
-               . 'document.addEventListener("keydown",function(e){if(e.key==="Escape"){closeMenus();closeSidebar();}});'
+               // Admin submenu: toggled by its button; stays open on desktop (a
+               // navigation rail), so outside clicks only close it on mobile.
+               . 'var adminBtn=document.getElementById("adminToggle");'
+               . 'var adminMenu=document.getElementById("adminMenu");'
+               . 'function setAdmin(open){if(!adminMenu)return;adminMenu.classList.toggle("hidden",!open);adminMenu.setAttribute("aria-hidden",open?"false":"true");if(adminBtn)adminBtn.setAttribute("aria-expanded",open?"true":"false");document.body.classList.toggle("admin-submenu-open",open);}'
+               . 'if(adminBtn&&adminMenu){adminBtn.addEventListener("click",function(e){e.preventDefault();setAdmin(adminMenu.classList.contains("hidden"));});}'
+               // Profile popup: standard popup behavior everywhere.
+               . 'var profileBtn=document.getElementById("profileToggle");'
+               . 'var profileMenu=document.getElementById("profileMenu");'
+               . 'function setProfile(open){if(!profileMenu)return;profileMenu.classList.toggle("hidden",!open);profileMenu.setAttribute("aria-hidden",open?"false":"true");if(profileBtn)profileBtn.setAttribute("aria-expanded",open?"true":"false");}'
+               . 'if(profileBtn&&profileMenu){profileBtn.addEventListener("click",function(e){e.preventDefault();setProfile(profileMenu.classList.contains("hidden"));});}'
+               . 'document.addEventListener("click",function(e){'
+               .   'if(profileBtn&&profileMenu&&!profileBtn.contains(e.target)&&!profileMenu.contains(e.target))setProfile(false);'
+               .   'if(!isDesktop()&&adminBtn&&adminMenu&&!adminBtn.contains(e.target)&&!adminMenu.contains(e.target))setAdmin(false);'
+               . '});'
+               . 'document.addEventListener("keydown",function(e){if(e.key==="Escape"){setProfile(false);if(!isDesktop())setAdmin(false);closeSidebar();}});'
                . '});</script>';
 
             echo '<div class="content"><main>';
