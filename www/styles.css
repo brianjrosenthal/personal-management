@@ -167,6 +167,14 @@ body {
   background: #f5f5f7;
 }
 
+/* Admin submenu: on desktop it opens as a vertical panel to the RIGHT of the
+   sidebar, aligned with the Admin item (overridden to an inline accordion on
+   mobile in the media query below). */
+.popup-menu.admin-submenu {
+  bottom: 0;
+  left: calc(100% + 10px);
+}
+
 /* Content area to the right of the sidebar */
 .content {
   margin-left: var(--sidebar-width);
@@ -575,6 +583,29 @@ details summary {
   .content {
     margin-left: 0;
     padding-top: var(--mobile-topbar-height);
+  }
+
+  /* Admin submenu: inline accordion beneath the Admin item. The bottom block
+     is anchored, so expanding the menu pushes the Admin item up. */
+  .popup-menu.admin-submenu {
+    position: static;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    border-radius: 0;
+    min-width: 0;
+    padding: 2px 0 4px 26px;
+  }
+
+  .popup-menu.admin-submenu a {
+    color: var(--color-sidebar-text);
+    padding: 9px 12px;
+  }
+
+  .popup-menu.admin-submenu a:hover,
+  .popup-menu.admin-submenu a:focus {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
   }
 
   main {

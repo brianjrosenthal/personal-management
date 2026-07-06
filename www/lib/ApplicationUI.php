@@ -91,7 +91,7 @@ class ApplicationUI {
                    . '<button type="button" id="adminToggle" class="sidebar-item sidebar-menu-toggle" aria-expanded="false" aria-controls="adminMenu">'
                    . '<span class="sidebar-item-icon" aria-hidden="true">&#9881;</span> Admin'
                    . '</button>'
-                   . '<div id="adminMenu" class="popup-menu hidden" role="menu" aria-hidden="true">'
+                   . '<div id="adminMenu" class="popup-menu admin-submenu hidden" role="menu" aria-hidden="true">'
                    .   '<a href="/admin/users.php" role="menuitem">Users</a>'
                    .   '<a href="/admin/settings.php" role="menuitem">Settings</a>'
                    .   '<a href="/admin/activity_log.php" role="menuitem">Activity Log</a>'
