@@ -220,6 +220,8 @@ CREATE INDEX idx_policies_expiration ON insurance_policies(expiration_date);
 
 -- ===== Recurring Obligations =====
 -- The app's central concept (see docs/app-spec.md). Recurrence types:
+--   does_not_repeat: one-time obligation due on anchor_date; next_due_on
+--     becomes NULL once completed
 --   every_n_days / every_n_weeks / every_n_months / every_n_years:
 --     fixed schedule of occurrences anchored at anchor_date, repeating every
 --     recurrence_interval of the type's unit
@@ -232,12 +234,12 @@ CREATE TABLE obligations (
   title VARCHAR(255) NOT NULL,
   description TEXT DEFAULT NULL COMMENT 'Instructions for completing the obligation',
   category VARCHAR(100) DEFAULT NULL,
-  recurrence_type ENUM('every_n_days','every_n_weeks','every_n_months','every_n_years','day_of_month','date_of_year','after_completion') NOT NULL,
+  recurrence_type ENUM('does_not_repeat','every_n_days','every_n_weeks','every_n_months','every_n_years','day_of_month','date_of_year','after_completion') NOT NULL,
   recurrence_interval INT DEFAULT NULL COMMENT 'N for every_n_* and after_completion',
   recurrence_unit ENUM('days','weeks','months') DEFAULT NULL COMMENT 'Unit for after_completion',
   day_of_month TINYINT DEFAULT NULL COMMENT '1-31 for day_of_month',
   annual_month_day CHAR(5) DEFAULT NULL COMMENT 'MM-DD for date_of_year',
-  anchor_date DATE DEFAULT NULL COMMENT 'Schedule start for every_n_*; optional first due date for after_completion',
+  anchor_date DATE DEFAULT NULL COMMENT 'Due date for does_not_repeat; schedule start for every_n_*; optional first due date for after_completion',
   responsible_user_id INT DEFAULT NULL COMMENT 'NULL = unassigned (notifications fall back to admins)',
   applies_to_user_id INT DEFAULT NULL COMMENT 'NULL = entire family',
   reminder_lead_days INT NOT NULL DEFAULT 7 COMMENT 'Days before due date to start reminding',

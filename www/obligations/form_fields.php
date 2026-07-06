@@ -34,6 +34,7 @@ function render_obligation_form_fields(array $v, array $opts): void {
     <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;">
       <label>Repeats
         <select name="recurrence_type" id="recurrenceType">
+          <option value="does_not_repeat" <?= $type === 'does_not_repeat' ? 'selected' : '' ?>>Does not repeat</option>
           <option value="every_n_days" <?= $type === 'every_n_days' ? 'selected' : '' ?>>Every N days</option>
           <option value="every_n_weeks" <?= $type === 'every_n_weeks' ? 'selected' : '' ?>>Every N weeks</option>
           <option value="every_n_months" <?= $type === 'every_n_months' ? 'selected' : '' ?>>Every N months</option>
@@ -42,6 +43,12 @@ function render_obligation_form_fields(array $v, array $opts): void {
           <option value="date_of_year" <?= $type === 'date_of_year' ? 'selected' : '' ?>>Specific date each year</option>
           <option value="after_completion" <?= $type === 'after_completion' ? 'selected' : '' ?>>N days/weeks/months after last completion</option>
         </select>
+      </label>
+
+      <label data-show-for="does_not_repeat">
+        Due date
+        <input type="date" name="anchor_date_once" value="<?=h($v['anchor_date_once'] ?? ($v['anchor_date'] ?? ''))?>">
+        <small class="small">One-time obligation — it will not come back after completion.</small>
       </label>
 
       <label data-show-for="every_n_days every_n_weeks every_n_months every_n_years after_completion">
@@ -178,6 +185,9 @@ function obligation_data_from_post(array $post): array {
     }
     if ($type === 'after_completion') {
         $data['anchor_date'] = trim((string)($post['anchor_date_after'] ?? ''));
+    }
+    if ($type === 'does_not_repeat') {
+        $data['anchor_date'] = trim((string)($post['anchor_date_once'] ?? ''));
     }
     return $data;
 }

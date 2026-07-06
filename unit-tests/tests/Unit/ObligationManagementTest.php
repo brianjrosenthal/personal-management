@@ -254,6 +254,45 @@ final class ObligationManagementTest extends TestCase
         $this->assertSame(['Upcoming thing'], array_column($groups['upcoming'], 'title'));
     }
 
+    public function testOneTimeObligationLifecycle(): void
+    {
+        $due = date('Y-m-d', strtotime('+3 days'));
+        $id = ObligationManagement::createObligation($this->ctx, [
+            'title' => 'Set up the trust',
+            'recurrence_type' => 'does_not_repeat',
+            'anchor_date' => $due,
+            'is_active' => 1,
+        ]);
+
+        $o = ObligationManagement::getObligation($id);
+        $this->assertSame($due, $o['next_due_on']);
+        $this->assertContains('Set up the trust', array_column(
+            ObligationManagement::dashboardObligations(date('Y-m-d'), 30)['upcoming'], 'title'));
+
+        // Completing it removes it from the schedule and the dashboard
+        ObligationManagement::addCompletion($this->ctx, $id, date('Y-m-d'));
+        $o = ObligationManagement::getObligation($id);
+        $this->assertNull($o['next_due_on']);
+        $groups = ObligationManagement::dashboardObligations(date('Y-m-d'), 30);
+        $all = array_merge($groups['overdue'], $groups['due_today'], $groups['upcoming']);
+        $this->assertNotContains('Set up the trust', array_column($all, 'title'));
+
+        // Removing the completion restores the due date
+        $history = ObligationManagement::listCompletions($id);
+        ObligationManagement::deleteCompletion($this->ctx, (int)$history[0]['id']);
+        $this->assertSame($due, ObligationManagement::getObligation($id)['next_due_on']);
+    }
+
+    public function testOneTimeObligationRequiresDueDate(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        ObligationManagement::createObligation($this->ctx, [
+            'title' => 'No date',
+            'recurrence_type' => 'does_not_repeat',
+            'is_active' => 1,
+        ]);
+    }
+
     public function testDeleteObligationCascades(): void
     {
         $id = $this->createAnnual('06-01');

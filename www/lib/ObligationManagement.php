@@ -12,6 +12,7 @@ class ObligationManagement {
     ];
 
     public const RECURRENCE_TYPES = [
+        'does_not_repeat',
         'every_n_days', 'every_n_weeks', 'every_n_months', 'every_n_years',
         'day_of_month', 'date_of_year', 'after_completion',
     ];
@@ -104,18 +105,25 @@ class ObligationManagement {
     }
 
     /**
-     * Compute next_due_on for an obligation.
+     * Compute next_due_on for an obligation. Returns null when nothing is due
+     * anymore (a completed one-time obligation).
      *
      * $lastCompletedOn null (never completed):
+     *   - does_not_repeat: the due date (anchor_date), even if in the past
      *   - fixed types: first occurrence on/after $today (anchor itself if in the future)
      *   - after_completion: anchor_date if set, else $today + N unit
      * With a completion:
+     *   - does_not_repeat: null — it is done
      *   - fixed types: first occurrence strictly after max(completed_on, previous
      *     next_due). Late completion skips missed occurrences; early completion
      *     still satisfies the pending one.
      *   - after_completion: completed_on + N unit
      */
-    public static function computeNextDueOn(array $o, ?string $lastCompletedOn, ?string $prevNextDue, string $today): string {
+    public static function computeNextDueOn(array $o, ?string $lastCompletedOn, ?string $prevNextDue, string $today): ?string {
+        if ($o['recurrence_type'] === 'does_not_repeat') {
+            return $lastCompletedOn === null ? (string)$o['anchor_date'] : null;
+        }
+
         if ($o['recurrence_type'] === 'after_completion') {
             $n = max(1, (int)$o['recurrence_interval']);
             $unit = (string)$o['recurrence_unit'];
@@ -158,6 +166,8 @@ class ObligationManagement {
     public static function describeRecurrence(array $o): string {
         $n = (int)($o['recurrence_interval'] ?? 0);
         switch ($o['recurrence_type']) {
+            case 'does_not_repeat':
+                return 'Does not repeat';
             case 'every_n_days':
                 return $n === 1 ? 'Every day' : "Every $n days";
             case 'every_n_weeks':
@@ -210,7 +220,12 @@ class ObligationManagement {
             'anchor_date' => null,
         ];
 
-        if (in_array($type, ['every_n_days', 'every_n_weeks', 'every_n_months', 'every_n_years'], true)) {
+        if ($type === 'does_not_repeat') {
+            if ($anchorDate === '') {
+                throw new InvalidArgumentException('A due date is required for a one-time obligation.');
+            }
+            $fields['anchor_date'] = $anchorDate;
+        } elseif (in_array($type, ['every_n_days', 'every_n_weeks', 'every_n_months', 'every_n_years'], true)) {
             if ($interval < 1) {
                 throw new InvalidArgumentException('Repeat interval must be at least 1.');
             }

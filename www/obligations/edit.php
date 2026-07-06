@@ -45,6 +45,9 @@ if (!empty($form)) {
     if ($obligation['recurrence_type'] === 'after_completion') {
         $values['anchor_date_after'] = $obligation['anchor_date'] ?? '';
     }
+    if ($obligation['recurrence_type'] === 'does_not_repeat') {
+        $values['anchor_date_once'] = $obligation['anchor_date'] ?? '';
+    }
 }
 
 $opts = [
@@ -69,7 +72,13 @@ header_html('Edit ' . $obligation['title']);
 
 <div class="card">
   <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;">
-    <div><strong>Next due:</strong> <?= obligation_due_html($obligation['next_due_on'], $today) ?></div>
+    <div><strong>Next due:</strong>
+      <?php if ($obligation['recurrence_type'] === 'does_not_repeat' && !$obligation['next_due_on'] && $obligation['last_completed_on']): ?>
+        <span class="status-verified">Completed</span>
+      <?php else: ?>
+        <?= obligation_due_html($obligation['next_due_on'], $today) ?>
+      <?php endif; ?>
+    </div>
     <div><strong>Last completed:</strong> <?= $obligation['last_completed_on'] ? h(date('M j, Y', strtotime($obligation['last_completed_on']))) : 'Never' ?></div>
     <div><strong>Repeats:</strong> <?=h(ObligationManagement::describeRecurrence($obligation))?></div>
   </div>

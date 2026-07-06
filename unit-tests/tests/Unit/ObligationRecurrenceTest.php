@@ -8,9 +8,29 @@ require_once __DIR__ . '/../../../www/lib/ObligationManagement.php';
 // Pure tests of the recurrence engine (no database).
 final class ObligationRecurrenceTest extends TestCase
 {
-    private function next(array $o, ?string $last, ?string $prevDue, string $today): string
+    private function next(array $o, ?string $last, ?string $prevDue, string $today): ?string
     {
         return ObligationManagement::computeNextDueOn($o, $last, $prevDue, $today);
+    }
+
+    // --- does_not_repeat ---
+
+    public function testDoesNotRepeatDueOnAnchorDate(): void
+    {
+        $o = ['recurrence_type' => 'does_not_repeat', 'anchor_date' => '2026-08-01'];
+        $this->assertSame('2026-08-01', $this->next($o, null, null, '2026-07-06'));
+    }
+
+    public function testDoesNotRepeatStaysOverdueWhenPastDue(): void
+    {
+        $o = ['recurrence_type' => 'does_not_repeat', 'anchor_date' => '2026-06-01'];
+        $this->assertSame('2026-06-01', $this->next($o, null, null, '2026-07-06'));
+    }
+
+    public function testDoesNotRepeatIsDoneAfterCompletion(): void
+    {
+        $o = ['recurrence_type' => 'does_not_repeat', 'anchor_date' => '2026-06-01'];
+        $this->assertNull($this->next($o, '2026-07-01', '2026-06-01', '2026-07-06'));
     }
 
     // --- every_n_days / weeks ---
@@ -168,6 +188,7 @@ final class ObligationRecurrenceTest extends TestCase
 
     public function testDescribeRecurrence(): void
     {
+        $this->assertSame('Does not repeat', ObligationManagement::describeRecurrence(['recurrence_type' => 'does_not_repeat']));
         $this->assertSame('Every 3 months', ObligationManagement::describeRecurrence(['recurrence_type' => 'every_n_months', 'recurrence_interval' => 3]));
         $this->assertSame('Every day', ObligationManagement::describeRecurrence(['recurrence_type' => 'every_n_days', 'recurrence_interval' => 1]));
         $this->assertSame('Monthly on day 15', ObligationManagement::describeRecurrence(['recurrence_type' => 'day_of_month', 'day_of_month' => 15]));

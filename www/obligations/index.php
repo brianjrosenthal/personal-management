@@ -63,7 +63,15 @@ header_html('Recurring Obligations');
             <td><?=h($o['category'] ?? '')?></td>
             <td class="small"><?=h(ObligationManagement::describeRecurrence($o))?></td>
             <td><?=h($o['responsible_name'] ?? '')?></td>
-            <td><?= !empty($o['is_active']) ? obligation_due_html($o['next_due_on'], $today) : '<span class="small">—</span>' ?></td>
+            <td>
+              <?php if ($o['recurrence_type'] === 'does_not_repeat' && !$o['next_due_on'] && $o['last_completed_on']): ?>
+                <span class="status-verified">Completed</span>
+              <?php elseif (!empty($o['is_active'])): ?>
+                <?= obligation_due_html($o['next_due_on'], $today) ?>
+              <?php else: ?>
+                <span class="small">—</span>
+              <?php endif; ?>
+            </td>
             <td><?= $o['last_completed_on'] ? h(date('M j, Y', strtotime($o['last_completed_on']))) : '<span class="small">Never</span>' ?></td>
             <td class="small" style="text-align:right;">
               <a class="button small" href="/obligations/edit.php?id=<?= (int)$o['id'] ?>">Edit</a>
