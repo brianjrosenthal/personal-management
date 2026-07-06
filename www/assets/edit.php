@@ -38,7 +38,7 @@ header_html('Edit ' . $asset['name']);
 <?php if ($err): ?><p class="error"><?=h($err)?></p><?php endif; ?>
 
 <div class="card">
-  <form method="post" action="/assets/edit_eval.php" class="stack">
+  <form method="post" action="/assets/edit_eval.php" class="stack" data-warn-unsaved>
     <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
     <input type="hidden" name="id" value="<?= (int)$assetId ?>">
     <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;">
@@ -110,7 +110,7 @@ header_html('Edit ' . $asset['name']);
 
 <div class="card">
   <h3>Danger Zone</h3>
-  <form method="post" action="/assets/remove_eval.php" onsubmit="return confirm('Delete this asset? This cannot be undone.');">
+  <form method="post" action="/assets/remove_eval.php" onsubmit="return confirm('Delete this asset? This cannot be undone.');" data-skip-unsaved-warning>
     <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
     <input type="hidden" name="id" value="<?= (int)$assetId ?>">
     <button class="danger" type="submit">Delete Asset</button>

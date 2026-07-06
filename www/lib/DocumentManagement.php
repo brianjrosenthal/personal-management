@@ -10,7 +10,7 @@ class DocumentManagement {
     // Suggested categories (free text — the UI offers these via a datalist)
     public const CATEGORY_SUGGESTIONS = [
         'Will', 'Trust', 'Insurance Policy', 'Deed', 'Passport', 'Birth Certificate',
-        'Marriage Certificate', 'Tax Return', 'Vaccination Record', 'Vehicle Title', 'Other',
+        'Marriage Certificate', 'Tax Return', 'Vaccination Record', 'Vehicle Title', "Health Insurance Card", 'Other',
     ];
 
     // Upload constraints for vault attachments
