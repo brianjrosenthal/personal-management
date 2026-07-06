@@ -7,8 +7,10 @@
 // in notification_log and not re-sent).
 //
 // Options:
-//   --date=YYYY-MM-DD  Run as-of a specific date (default: today in the app timezone)
-//   --dry-run          Report what would be sent without sending or recording anything
+//   --date=YYYY-MM-DD    Run as-of a specific date (default: today in the app timezone)
+//   --dry-run            Report what would be sent without sending or recording anything
+//   --ignore-throttling  Send even if already sent (bypasses the notification_log
+//                        dedup — for testing; combine with --date to replay any day)
 
 declare(strict_types=1);
 
@@ -25,9 +27,10 @@ require_once __DIR__ . '/../lib/ActivityLog.php';
 // "Today" must be evaluated in the family's timezone, not the server's
 date_default_timezone_set(Settings::timezone());
 
-$options = getopt('', ['date::', 'dry-run']);
+$options = getopt('', ['date::', 'dry-run', 'ignore-throttling']);
 $today = $options['date'] ?? date('Y-m-d');
 $dryRun = array_key_exists('dry-run', $options);
+$ignoreThrottling = array_key_exists('ignore-throttling', $options);
 
 if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)$today)) {
     fwrite(STDERR, "Invalid --date (expected YYYY-MM-DD)\n");
@@ -35,10 +38,12 @@ if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)$today)) {
 }
 
 $startedAt = microtime(true);
-echo 'Notification run for ' . $today . ($dryRun ? ' (dry run)' : '') . "\n";
+echo 'Notification run for ' . $today
+    . ($dryRun ? ' (dry run)' : '')
+    . ($ignoreThrottling ? ' (ignoring throttling)' : '') . "\n";
 
 try {
-    $stats = NotificationManagement::runDailyNotifications((string)$today, null, $dryRun);
+    $stats = NotificationManagement::runDailyNotifications((string)$today, null, $dryRun, $ignoreThrottling);
 } catch (Throwable $e) {
     fwrite(STDERR, 'FATAL: ' . $e->getMessage() . "\n");
     ActivityLog::log(null, 'notifications.run_failed', ['date' => $today, 'error' => $e->getMessage()]);

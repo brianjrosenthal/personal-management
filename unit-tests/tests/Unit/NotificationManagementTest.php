@@ -114,6 +114,22 @@ final class NotificationManagementTest extends TestCase
         $this->assertCount(1, $this->sentEmails);
     }
 
+    public function testIgnoreThrottlingResendsSameDay(): void
+    {
+        $this->createDue(self::TUE);
+
+        $first = $this->runNotifications(self::TUE);
+        $again = NotificationManagement::runDailyNotifications(self::TUE, $this->fakeSender(), false, true);
+
+        $this->assertSame(1, $first['emails_sent']);
+        $this->assertSame(1, $again['emails_sent']);
+        $this->assertCount(2, $this->sentEmails);
+
+        // Normal throttled runs are unaffected afterwards
+        $throttled = $this->runNotifications(self::TUE);
+        $this->assertSame(0, $throttled['emails_sent']);
+    }
+
     public function testOverdueTriggersAgainNextDay(): void
     {
         $this->createDue(self::TUE);

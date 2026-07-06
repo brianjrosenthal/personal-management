@@ -38,7 +38,7 @@ class NotificationManagement {
      *   ]
      * plus '_stats' with the evaluated-obligation count.
      */
-    public static function collectRecipientDigests(string $today, ?bool $isWeeklyDay = null): array {
+    public static function collectRecipientDigests(string $today, ?bool $isWeeklyDay = null, bool $ignoreThrottling = false): array {
         $isWeeklyDay = $isWeeklyDay ?? self::isWeeklyDay($today);
 
         $usersById = [];
@@ -99,16 +99,17 @@ class NotificationManagement {
                 $rid = $ensure($recipient);
                 $digests[$rid][$bucket][] = $o;
 
-                // Trigger determination (dedup against the notification log)
+                // Trigger determination (dedup against the notification log;
+                // $ignoreThrottling bypasses the dedup for testing)
                 $oid = (int)$o['id'];
-                if ($bucket === 'overdue' && !self::wasSentOn($oid, $rid, 'overdue', $today)) {
+                if ($bucket === 'overdue' && ($ignoreThrottling || !self::wasSentOn($oid, $rid, 'overdue', $today))) {
                     $digests[$rid]['triggers'][] = [$oid, 'overdue'];
-                } elseif ($bucket === 'due_today' && !self::wasSentOn($oid, $rid, 'due_today', $today)) {
+                } elseif ($bucket === 'due_today' && ($ignoreThrottling || !self::wasSentOn($oid, $rid, 'due_today', $today))) {
                     $digests[$rid]['triggers'][] = [$oid, 'due_today'];
                 } elseif ($bucket === 'upcoming' && $daysUntil <= $lead) {
                     // Entering the reminder window triggers once per window
                     $windowStart = date('Y-m-d', strtotime($o['next_due_on'] . ' -' . $lead . ' days'));
-                    if (!self::wasSentSince($oid, $rid, 'entered_window', $windowStart)) {
+                    if ($ignoreThrottling || !self::wasSentSince($oid, $rid, 'entered_window', $windowStart)) {
                         $digests[$rid]['triggers'][] = [$oid, 'entered_window'];
                     }
                 }
@@ -120,7 +121,7 @@ class NotificationManagement {
         if ($isWeeklyDay) {
             foreach ($digests as $rid => &$digest) {
                 $hasContent = !empty($digest['overdue']) || !empty($digest['due_today']) || !empty($digest['upcoming']);
-                if ($hasContent && !self::wasSentOn(null, $rid, 'weekly_summary', $today)) {
+                if ($hasContent && ($ignoreThrottling || !self::wasSentOn(null, $rid, 'weekly_summary', $today))) {
                     $digest['triggers'][] = [null, 'weekly_summary'];
                 }
             }
@@ -145,9 +146,10 @@ class NotificationManagement {
      * @param callable|null $sendEmail fn(string $to, string $toName, string $subject, string $html): bool
      *                                 (defaults to the SMTP mailer; tests inject a fake)
      * @param bool $dryRun collect and report, but send nothing and record nothing
+     * @param bool $ignoreThrottling re-send even if already sent (for testing)
      * @return array stats
      */
-    public static function runDailyNotifications(string $today, ?callable $sendEmail = null, bool $dryRun = false): array {
+    public static function runDailyNotifications(string $today, ?callable $sendEmail = null, bool $dryRun = false, bool $ignoreThrottling = false): array {
         if ($sendEmail === null) {
             require_once __DIR__ . '/../mailer.php';
             $sendEmail = function (string $to, string $toName, string $subject, string $html): bool {
@@ -155,7 +157,7 @@ class NotificationManagement {
             };
         }
 
-        $digests = self::collectRecipientDigests($today);
+        $digests = self::collectRecipientDigests($today, null, $ignoreThrottling);
         $stats = [
             'date' => $today,
             'obligations_evaluated' => $digests['_stats']['obligations_evaluated'],
@@ -164,6 +166,7 @@ class NotificationManagement {
             'emails_failed' => 0,
             'notifications_recorded' => 0,
             'dry_run' => $dryRun,
+            'ignore_throttling' => $ignoreThrottling,
         ];
         unset($digests['_stats']);
 
