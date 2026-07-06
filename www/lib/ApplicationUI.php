@@ -162,9 +162,8 @@ class ApplicationUI {
                . 'if(profileBtn&&profileMenu){profileBtn.addEventListener("click",function(e){e.preventDefault();setProfile(profileMenu.classList.contains("hidden"));});}'
                . 'document.addEventListener("click",function(e){'
                .   'if(profileBtn&&profileMenu&&!profileBtn.contains(e.target)&&!profileMenu.contains(e.target))setProfile(false);'
-               .   'if(!isDesktop()&&adminBtn&&adminMenu&&!adminBtn.contains(e.target)&&!adminMenu.contains(e.target))setAdmin(false);'
                . '});'
-               . 'document.addEventListener("keydown",function(e){if(e.key==="Escape"){setProfile(false);if(!isDesktop())setAdmin(false);closeSidebar();}});'
+               . 'document.addEventListener("keydown",function(e){if(e.key==="Escape"){setProfile(false);closeSidebar();}});'
                . '});</script>';
 
             echo '<div class="content"><main>';
