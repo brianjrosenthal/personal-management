@@ -34,7 +34,9 @@ INSERT INTO settings (key_name, value) VALUES
   ('site_title', 'Family Office'),
   ('announcement', ''),
   ('timezone', 'America/New_York'),
-  ('login_image_file_id', '')
+  ('login_image_file_id', ''),
+  ('site_base_url', 'https://familyoffice.brianrosenthal.org'),
+  ('weekly_digest_enabled', '1')
 ON DUPLICATE KEY UPDATE value=VALUES(value);
 
 -- ===== Files Storage (DB-backed uploads) =====
@@ -310,6 +312,31 @@ CREATE TABLE obligation_contacts (
   CONSTRAINT fk_ocn_contact FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE CASCADE,
   UNIQUE KEY unique_obligation_contact (obligation_id, contact_id)
 ) ENGINE=InnoDB;
+
+-- ===== Notification Log =====
+-- Every emailed reminder is recorded here; the daily runner checks it before
+-- sending so it is safe to run multiple times per day (idempotent).
+-- notification_type:
+--   overdue        — re-sent daily while overdue
+--   due_today      — sent on the due date
+--   entered_window — sent once when the obligation enters its reminder window
+--   weekly_summary — Monday "week ahead" digest (obligation_id is NULL)
+CREATE TABLE notification_log (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  obligation_id INT DEFAULT NULL,
+  recipient_user_id INT NOT NULL,
+  notification_type ENUM('overdue','due_today','entered_window','weekly_summary') NOT NULL,
+  notification_date DATE NOT NULL,
+  sent_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  email_address VARCHAR(255) DEFAULT NULL,
+  delivery_status ENUM('sent','failed') NOT NULL DEFAULT 'sent',
+  error_message TEXT DEFAULT NULL,
+  CONSTRAINT fk_nl_obligation FOREIGN KEY (obligation_id) REFERENCES obligations(id) ON DELETE CASCADE,
+  CONSTRAINT fk_nl_recipient FOREIGN KEY (recipient_user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE INDEX idx_nl_dedup ON notification_log(obligation_id, recipient_user_id, notification_type, notification_date);
+CREATE INDEX idx_nl_date ON notification_log(notification_date);
 
 -- Optional: seed an admin user (update email and password hash, then remove)
 INSERT INTO users (first_name,last_name,email,password_hash,is_admin,email_verified_at)

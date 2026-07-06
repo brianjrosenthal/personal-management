@@ -29,6 +29,16 @@ $SETTINGS_DEF = [
     'hint'  => 'Image displayed on login and authentication pages. Recommended size: 200px wide.',
     'type'  => 'file',
   ],
+  'site_base_url' => [
+    'label' => 'Site URL',
+    'hint'  => 'Used for links in reminder emails, e.g. https://familyoffice.brianrosenthal.org',
+    'type'  => 'text',
+  ],
+  'weekly_digest_enabled' => [
+    'label' => 'Send a weekly summary email on Mondays',
+    'hint'  => 'A "week ahead" digest of everything due in the next 7 days, even if nothing is urgent.',
+    'type'  => 'checkbox',
+  ],
 ];
 
 // Handle save
@@ -88,6 +98,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           // Keep current value
           Settings::set($key, $currentVal);
         }
+      } elseif ($typ === 'checkbox') {
+        Settings::set($key, !empty($_POST['s'][$key]) ? '1' : '0');
       } else {
         // Handle regular settings
         $val = $_POST['s'][$key] ?? '';
@@ -137,6 +149,8 @@ header_html('Manage Settings');
               <option value="<?=h($z)?>" <?= $current[$key] === $z ? 'selected' : '' ?>><?=h($z)?></option>
             <?php endforeach; ?>
           </select>
+        <?php elseif ($typ === 'checkbox'): ?>
+          <input type="checkbox" name="s[<?=h($key)?>]" value="1" <?= $current[$key] === '1' ? 'checked' : '' ?> style="width:auto;align-self:flex-start;">
         <?php elseif ($typ === 'file'): ?>
           <?php 
             // Show current image if set
