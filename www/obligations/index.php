@@ -7,9 +7,9 @@ Application::init();
 require_login();
 
 $search = trim($_GET['q'] ?? '');
-$view = $_GET['view'] ?? 'list';
+$view = $_GET['view'] ?? 'month';
 if (!in_array($view, ['list', 'month', 'category'], true)) {
-    $view = 'list';
+    $view = 'month';
 }
 
 $obligations = ObligationManagement::listObligations($search);
@@ -23,7 +23,7 @@ $today = date('Y-m-d');
 
 function obligations_view_url(string $view, string $search): string {
     $params = [];
-    if ($view !== 'list') $params['view'] = $view;
+    if ($view !== 'month') $params['view'] = $view; // month is the default
     if ($search !== '') $params['q'] = $search;
     return '/obligations/' . (!empty($params) ? '?' . http_build_query($params) : '');
 }
@@ -133,12 +133,12 @@ header_html('Recurring Obligations');
 
 <div class="card">
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
-    <a class="button small <?= $view === 'list' ? 'primary' : '' ?>" href="<?=h(obligations_view_url('list', $search))?>">List</a>
     <a class="button small <?= $view === 'month' ? 'primary' : '' ?>" href="<?=h(obligations_view_url('month', $search))?>">By Month</a>
+    <a class="button small <?= $view === 'list' ? 'primary' : '' ?>" href="<?=h(obligations_view_url('list', $search))?>">List</a>
     <a class="button small <?= $view === 'category' ? 'primary' : '' ?>" href="<?=h(obligations_view_url('category', $search))?>">By Category</a>
   </div>
   <form method="get" data-auto-submit>
-    <?php if ($view !== 'list'): ?><input type="hidden" name="view" value="<?=h($view)?>"><?php endif; ?>
+    <?php if ($view !== 'month'): ?><input type="hidden" name="view" value="<?=h($view)?>"><?php endif; ?>
     <label>Search
       <input type="text" name="q" value="<?=h($search)?>" placeholder="Title, category, or description">
     </label>
