@@ -17,7 +17,8 @@ final class ObligationManagementTest extends TestCase
         test_reset_users();
         pdo()->exec('SET FOREIGN_KEY_CHECKS=0');
         foreach (['obligation_assets', 'obligation_documents', 'obligation_policies', 'obligation_contacts',
-                  'obligation_completions', 'obligations', 'assets', 'contacts', 'contact_categories'] as $t) {
+                  'obligation_comments', 'obligation_completions', 'obligations', 'assets', 'contacts',
+                  'contact_categories', 'private_files'] as $t) {
             pdo()->exec("TRUNCATE TABLE $t");
         }
         pdo()->exec('SET FOREIGN_KEY_CHECKS=1');
@@ -291,6 +292,100 @@ final class ObligationManagementTest extends TestCase
             'recurrence_type' => 'does_not_repeat',
             'is_active' => 1,
         ]);
+    }
+
+    // ===== Comments / updates =====
+
+    public function testAddCommentAndListUpdates(): void
+    {
+        $id = $this->createAnnual('06-01');
+        $c1 = ObligationManagement::addComment($this->ctx, $id, 'Called the county, waiting for a callback.');
+        $c2 = ObligationManagement::addComment($this->ctx, $id, 'They called back — payment plan confirmed.');
+
+        $updates = ObligationManagement::listUpdates($id);
+        $this->assertCount(2, $updates);
+        // Newest first (same timestamp resolves by id)
+        $this->assertSame($c2, (int)$updates[0]['id']);
+        $this->assertSame($c1, (int)$updates[1]['id']);
+        $this->assertSame('comment', $updates[0]['kind']);
+        $this->assertSame('Test User', $updates[0]['created_by_name']);
+    }
+
+    public function testAddCommentRejectsEmptyUpdate(): void
+    {
+        $id = $this->createAnnual('06-01');
+        $this->expectException(InvalidArgumentException::class);
+        ObligationManagement::addComment($this->ctx, $id, '   ');
+    }
+
+    public function testCommentWithAttachment(): void
+    {
+        $id = $this->createAnnual('06-01');
+        $fileId = Files::insertPrivateFile('receipt-bytes', 'application/pdf', 'receipt.pdf', $this->ctx->id);
+        $commentId = ObligationManagement::addComment($this->ctx, $id, 'Receipt attached.', $fileId);
+
+        $updates = ObligationManagement::listUpdates($id);
+        $this->assertSame('receipt.pdf', $updates[0]['original_filename']);
+
+        // Removing the update deletes the attachment bytes
+        $this->assertTrue(ObligationManagement::deleteComment($this->ctx, $commentId));
+        $this->assertNull(Files::getPrivateFileMeta($fileId));
+        $this->assertSame([], ObligationManagement::listUpdates($id));
+    }
+
+    public function testCommentLinkedToCompletionRemovesCompletionOnDelete(): void
+    {
+        $today = date('Y-m-d');
+        $id = ObligationManagement::createObligation($this->ctx, [
+            'title' => 'Gutters',
+            'recurrence_type' => 'after_completion',
+            'recurrence_interval' => 90,
+            'recurrence_unit' => 'days',
+            'is_active' => 1,
+        ]);
+        $originalDue = ObligationManagement::getObligation($id)['next_due_on'];
+
+        // The update_eval flow: completion first, then the linked comment
+        $completionId = ObligationManagement::addCompletion($this->ctx, $id, $today);
+        $commentId = ObligationManagement::addComment($this->ctx, $id, 'Done, receipt to follow.', null, $completionId);
+
+        $o = ObligationManagement::getObligation($id);
+        $this->assertSame($today, $o['last_completed_on']);
+
+        $updates = ObligationManagement::listUpdates($id);
+        $this->assertCount(1, $updates, 'Linked completion must not appear as a separate bare entry');
+        $this->assertSame('comment', $updates[0]['kind']);
+        $this->assertSame($today, $updates[0]['completed_on']);
+
+        // Deleting the update undoes the completion and recomputes the schedule
+        $this->assertTrue(ObligationManagement::deleteComment($this->ctx, $commentId));
+        $o = ObligationManagement::getObligation($id);
+        $this->assertNull($o['last_completed_on']);
+        $this->assertSame($originalDue, $o['next_due_on']);
+        $this->assertSame([], ObligationManagement::listCompletions($id));
+    }
+
+    public function testListUpdatesIncludesBareCompletions(): void
+    {
+        $id = $this->createAnnual('06-01');
+        ObligationManagement::addCompletion($this->ctx, $id, date('Y-m-d'), 'Quick complete from homepage');
+        ObligationManagement::addComment($this->ctx, $id, 'A separate comment.');
+
+        $updates = ObligationManagement::listUpdates($id);
+        $this->assertCount(2, $updates);
+        $kinds = array_column($updates, 'kind');
+        sort($kinds);
+        $this->assertSame(['comment', 'completion'], $kinds);
+    }
+
+    public function testDeleteObligationDeletesCommentAttachmentBytes(): void
+    {
+        $id = $this->createAnnual('06-01');
+        $fileId = Files::insertPrivateFile('receipt-bytes', 'application/pdf', 'receipt.pdf', $this->ctx->id);
+        ObligationManagement::addComment($this->ctx, $id, null, $fileId);
+
+        $this->assertTrue(ObligationManagement::deleteObligation($this->ctx, $id));
+        $this->assertNull(Files::getPrivateFileMeta($fileId), 'Attachment bytes should not linger after obligation delete');
     }
 
     public function testDeleteObligationCascades(): void

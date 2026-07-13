@@ -4,6 +4,8 @@ declare(strict_types=1);
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/UserContext.php';
 require_once __DIR__ . '/ActivityLog.php';
+require_once __DIR__ . '/Files.php';
+require_once __DIR__ . '/DocumentManagement.php';
 
 class ObligationManagement {
     // Categories from the spec (free text — the UI offers these via a datalist)
@@ -336,8 +338,16 @@ class ObligationManagement {
         $obligation = self::getObligation($id);
         if (!$obligation) return false;
 
+        // Comment attachments are sensitive (receipts) — delete their bytes
+        // before the comment rows cascade away.
+        $fileSt = self::pdo()->prepare('SELECT private_file_id FROM obligation_comments WHERE obligation_id = ? AND private_file_id IS NOT NULL');
+        $fileSt->execute([$id]);
+        foreach ($fileSt->fetchAll() as $row) {
+            Files::deletePrivateFile((int)$row['private_file_id']);
+        }
+
         $st = self::pdo()->prepare('DELETE FROM obligations WHERE id = ?');
-        $ok = $st->execute([$id]); // completions and links cascade
+        $ok = $st->execute([$id]); // completions, comments, and links cascade
 
         if ($ok) {
             self::log('obligation.delete', $id, ['title' => $obligation['title']]);
@@ -505,6 +515,129 @@ class ObligationManagement {
         $nextDue = self::computeNextDueOn($obligation, $lastCompleted, null, date('Y-m-d'));
         $upd = self::pdo()->prepare('UPDATE obligations SET last_completed_on = ?, next_due_on = ? WHERE id = ?');
         $upd->execute([$lastCompleted, $nextDue, $obligationId]);
+    }
+
+    // ===== Comments (progress updates, optionally with an attachment and/or
+    // a linked completion) =====
+
+    // Attachment constraints match vault documents
+    public const ATTACHMENT_MAX_BYTES = DocumentManagement::MAX_FILE_BYTES;
+    public const ATTACHMENT_MIME_TYPES = DocumentManagement::ALLOWED_MIME_TYPES;
+
+    // Validate and store an uploaded update attachment ($_FILES entry).
+    // Returns the new private_files id.
+    public static function storeUploadedAttachment(?UserContext $ctx, array $file): int {
+        $ctx = self::assertLoggedIn($ctx);
+        return Files::storeUploadedPrivateFile($ctx->id, $file, self::ATTACHMENT_MAX_BYTES, self::ATTACHMENT_MIME_TYPES);
+    }
+
+    public static function addComment(?UserContext $ctx, int $obligationId, ?string $comment, ?int $privateFileId = null, ?int $completionId = null): int {
+        $ctx = self::assertLoggedIn($ctx);
+        if (!self::getObligation($obligationId)) {
+            throw new InvalidArgumentException('Obligation not found.');
+        }
+
+        $comment = $comment !== null ? trim($comment) : '';
+        if ($comment === '' && $privateFileId === null && $completionId === null) {
+            throw new InvalidArgumentException('An update needs a comment, an attachment, or a completion.');
+        }
+
+        $st = self::pdo()->prepare(
+            'INSERT INTO obligation_comments (obligation_id, created_by_user_id, comment, private_file_id, completion_id)
+             VALUES (?,?,?,?,?)'
+        );
+        $st->execute([$obligationId, $ctx->id, $comment !== '' ? $comment : null, $privateFileId, $completionId]);
+        $id = (int)self::pdo()->lastInsertId();
+
+        self::log('obligation.comment', $obligationId, [
+            'comment_id' => $id,
+            'has_attachment' => $privateFileId !== null,
+            'marked_complete' => $completionId !== null,
+        ]);
+        return $id;
+    }
+
+    public static function getComment(int $commentId): ?array {
+        $st = self::pdo()->prepare(
+            "SELECT oc.*, pf.original_filename, pf.byte_length
+             FROM obligation_comments oc
+             LEFT JOIN private_files pf ON pf.id = oc.private_file_id
+             WHERE oc.id = ? LIMIT 1"
+        );
+        $st->execute([$commentId]);
+        $row = $st->fetch();
+        return $row ?: null;
+    }
+
+    // Delete an update: removes the attachment bytes, and if the update marked
+    // a completion, removes that completion too (the schedule recomputes).
+    public static function deleteComment(?UserContext $ctx, int $commentId): bool {
+        self::assertLoggedIn($ctx);
+        $comment = self::getComment($commentId);
+        if (!$comment) return false;
+
+        $del = self::pdo()->prepare('DELETE FROM obligation_comments WHERE id = ?');
+        $ok = $del->execute([$commentId]);
+        if (!$ok) return false;
+
+        if (!empty($comment['private_file_id'])) {
+            Files::deletePrivateFile((int)$comment['private_file_id']);
+        }
+        if (!empty($comment['completion_id'])) {
+            self::deleteCompletion($ctx, (int)$comment['completion_id']);
+        }
+
+        self::log('obligation.comment_delete', (int)$comment['obligation_id'], ['comment_id' => $commentId]);
+        return true;
+    }
+
+    /**
+     * Unified newest-first history feed for an obligation: every comment (with
+     * author, attachment metadata, and its linked completion if any) plus bare
+     * completions that no comment references (e.g. homepage quick-completes).
+     *
+     * Each entry has: 'kind' ('comment'|'completion'), 'sort_key', and the
+     * relevant fields; comment entries carry 'completed_on' when they marked
+     * a completion.
+     */
+    public static function listUpdates(int $obligationId): array {
+        $updates = [];
+
+        $cs = self::pdo()->prepare(
+            "SELECT oc.*, pf.original_filename, pf.byte_length,
+                    CONCAT(u.first_name, ' ', u.last_name) AS created_by_name,
+                    comp.completed_on
+             FROM obligation_comments oc
+             LEFT JOIN private_files pf ON pf.id = oc.private_file_id
+             LEFT JOIN users u ON u.id = oc.created_by_user_id
+             LEFT JOIN obligation_completions comp ON comp.id = oc.completion_id
+             WHERE oc.obligation_id = ?"
+        );
+        $cs->execute([$obligationId]);
+        foreach ($cs->fetchAll() as $row) {
+            $row['kind'] = 'comment';
+            $row['sort_key'] = $row['created_at'];
+            $updates[] = $row;
+        }
+
+        $bs = self::pdo()->prepare(
+            "SELECT oc.*, CONCAT(u.first_name, ' ', u.last_name) AS created_by_name
+             FROM obligation_completions oc
+             LEFT JOIN users u ON u.id = oc.completed_by_user_id
+             WHERE oc.obligation_id = ?
+               AND NOT EXISTS (SELECT 1 FROM obligation_comments c WHERE c.completion_id = oc.id)"
+        );
+        $bs->execute([$obligationId]);
+        foreach ($bs->fetchAll() as $row) {
+            $row['kind'] = 'completion';
+            $row['sort_key'] = $row['created_at'];
+            $updates[] = $row;
+        }
+
+        usort($updates, function (array $a, array $b): int {
+            return [$b['sort_key'], (int)$b['id']] <=> [$a['sort_key'], (int)$a['id']];
+        });
+        return $updates;
     }
 
     // ===== Linked objects =====

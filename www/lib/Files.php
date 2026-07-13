@@ -199,6 +199,40 @@ final class Files {
   // ===== Private files (Document Vault) =====
   // Served ONLY through a login-checked endpoint; never written to the disk cache.
 
+  // Validate and store an uploaded private file ($_FILES entry): checks the
+  // upload error, size cap, and server-sniffed MIME against the allowlist.
+  // Returns the new private_files id. Used for vault documents and obligation
+  // attachments.
+  public static function storeUploadedPrivateFile(?int $createdByUserId, array $file, int $maxBytes, array $allowedMimeTypes): int {
+    $err = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
+    if ($err !== UPLOAD_ERR_OK) {
+      throw new InvalidArgumentException('File upload failed (error ' . $err . ').');
+    }
+
+    $size = (int)($file['size'] ?? 0);
+    if ($size <= 0) {
+      throw new InvalidArgumentException('Uploaded file is empty.');
+    }
+    if ($size > $maxBytes) {
+      throw new InvalidArgumentException('File is too large (max ' . round($maxBytes / 1048576) . ' MB).');
+    }
+
+    $tmp = (string)($file['tmp_name'] ?? '');
+    $finfo = new finfo(FILEINFO_MIME_TYPE);
+    $mime = (string)$finfo->file($tmp);
+    if (!in_array($mime, $allowedMimeTypes, true)) {
+      throw new InvalidArgumentException('Unsupported file type (' . $mime . '). Allowed: PDF, images, Word, Excel, text.');
+    }
+
+    $data = @file_get_contents($tmp);
+    if ($data === false) {
+      throw new RuntimeException('Failed to read uploaded file.');
+    }
+
+    $originalName = (string)($file['name'] ?? 'document');
+    return self::insertPrivateFile($data, $mime, $originalName, $createdByUserId);
+  }
+
   // Insert a private file row and return the new id
   public static function insertPrivateFile(string $data, ?string $contentType, ?string $originalFilename, ?int $createdByUserId): int {
     $sha = hash('sha256', $data);

@@ -53,34 +53,7 @@ class DocumentManagement {
     // Returns the new private_files id.
     public static function storeUploadedFile(?UserContext $ctx, array $file): int {
         $ctx = self::assertLoggedIn($ctx);
-
-        $err = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
-        if ($err !== UPLOAD_ERR_OK) {
-            throw new InvalidArgumentException('File upload failed (error ' . $err . ').');
-        }
-
-        $size = (int)($file['size'] ?? 0);
-        if ($size <= 0) {
-            throw new InvalidArgumentException('Uploaded file is empty.');
-        }
-        if ($size > self::MAX_FILE_BYTES) {
-            throw new InvalidArgumentException('File is too large (max 20 MB).');
-        }
-
-        $tmp = (string)($file['tmp_name'] ?? '');
-        $finfo = new finfo(FILEINFO_MIME_TYPE);
-        $mime = (string)$finfo->file($tmp);
-        if (!in_array($mime, self::ALLOWED_MIME_TYPES, true)) {
-            throw new InvalidArgumentException('Unsupported file type (' . $mime . '). Allowed: PDF, images, Word, Excel, text.');
-        }
-
-        $data = @file_get_contents($tmp);
-        if ($data === false) {
-            throw new RuntimeException('Failed to read uploaded file.');
-        }
-
-        $originalName = (string)($file['name'] ?? 'document');
-        return Files::insertPrivateFile($data, $mime, $originalName, $ctx->id);
+        return Files::storeUploadedPrivateFile($ctx->id, $file, self::MAX_FILE_BYTES, self::ALLOWED_MIME_TYPES);
     }
 
     // Normalize/validate shared form fields. Returns [title, category, description, owner_user_id]

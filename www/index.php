@@ -38,9 +38,10 @@ function dashboard_section(string $title, array $rows, string $today): void {
             </td>
             <td><?= obligation_due_html($o['next_due_on'], $today) ?></td>
             <td style="text-align:right;white-space:nowrap;">
-              <form method="post" action="/obligations/complete_eval.php" style="display:inline;">
+              <form method="post" action="/obligations/update_eval.php" style="display:inline;">
                 <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
                 <input type="hidden" name="obligation_id" value="<?= (int)$o['id'] ?>">
+                <input type="hidden" name="completed" value="1">
                 <input type="hidden" name="completed_on" value="<?=h($today)?>">
                 <input type="hidden" name="return" value="/index.php">
                 <button class="button small" type="submit">Mark Complete</button>

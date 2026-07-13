@@ -20,7 +20,7 @@ if (!$obligation) {
     exit;
 }
 
-$completions = ObligationManagement::listCompletions($obligationId);
+$updates = ObligationManagement::listUpdates($obligationId);
 $linked = ObligationManagement::getLinkedObjects($obligationId);
 
 // One-shot flash + form repopulation from eval pages
@@ -85,19 +85,28 @@ header_html('Edit ' . $obligation['title']);
 </div>
 
 <div class="card">
-  <h3>Mark Complete</h3>
-  <form method="post" action="/obligations/complete_eval.php" class="stack">
+  <h3>Update Obligation</h3>
+  <form method="post" action="/obligations/update_eval.php" enctype="multipart/form-data" class="stack" id="updateForm">
     <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
     <input type="hidden" name="obligation_id" value="<?= (int)$obligationId ?>">
     <input type="hidden" name="return" value="/obligations/edit.php?id=<?= (int)$obligationId ?>">
-    <div class="grid" style="grid-template-columns:220px 1fr auto;gap:12px;align-items:end;">
-      <label>Completed on
-        <input type="date" name="completed_on" value="<?=h($today)?>" required>
+    <label>Comment
+      <textarea name="comment" rows="4" placeholder="Document progress — e.g. Called the county, waiting for a callback. Paid online, confirmation #12345…"></textarea>
+    </label>
+    <label>Attachment (optional)
+      <input type="file" name="attachment">
+      <small class="small">Receipts, confirmations, paperwork. PDF, images, Word, Excel, or text — max 20 MB. Stored privately.</small>
+    </label>
+    <div class="grid" style="grid-template-columns:auto 200px 1fr;gap:12px;align-items:center;">
+      <label class="inline">
+        <input type="checkbox" name="completed" value="1" id="updateCompleted">
+        Mark complete
       </label>
-      <label>Notes (optional)
-        <input type="text" name="notes" placeholder="e.g. Paid online, confirmation #12345">
-      </label>
-      <button class="primary" type="submit">Mark Complete</button>
+      <input type="date" name="completed_on" value="<?=h($today)?>" id="updateCompletedOn" disabled aria-label="Completed on">
+      <span></span>
+    </div>
+    <div class="actions">
+      <button class="primary" type="submit" id="updateBtn">Add Update</button>
     </div>
   </form>
 </div>
@@ -141,32 +150,54 @@ header_html('Edit ' . $obligation['title']);
 <?php endif; ?>
 
 <div class="card">
-  <h3>Completion History</h3>
-  <?php if (empty($completions)): ?>
-    <p class="small">Never completed.</p>
+  <h3>History</h3>
+  <?php if (empty($updates)): ?>
+    <p class="small">No updates yet.</p>
   <?php else: ?>
     <table class="list">
       <thead>
         <tr>
-          <th>Completed on</th>
-          <th>Completed by</th>
-          <th>Notes</th>
+          <th>When</th>
+          <th>By</th>
+          <th>Update</th>
           <th></th>
         </tr>
       </thead>
       <tbody>
-        <?php foreach ($completions as $c): ?>
+        <?php foreach ($updates as $u): ?>
           <tr>
-            <td><?=h(date('M j, Y', strtotime($c['completed_on'])))?></td>
-            <td><?=h($c['completed_by_name'] ?? '')?></td>
-            <td><?=h($c['notes'] ?? '')?></td>
+            <td style="white-space:nowrap;"><?=h(date('M j, Y', strtotime($u['created_at'])))?></td>
+            <td><?=h($u['created_by_name'] ?? '')?></td>
+            <td>
+              <?php if ($u['kind'] === 'completion'): ?>
+                <span class="badge success">Completed <?=h(date('M j, Y', strtotime($u['completed_on'])))?></span>
+                <?php if (!empty($u['notes'])): ?><div><?=nl2br(h($u['notes']))?></div><?php endif; ?>
+              <?php else: ?>
+                <?php if (!empty($u['completion_id']) && !empty($u['completed_on'])): ?>
+                  <span class="badge success">Completed <?=h(date('M j, Y', strtotime($u['completed_on'])))?></span>
+                <?php endif; ?>
+                <?php if (!empty($u['comment'])): ?><div><?=nl2br(h($u['comment']))?></div><?php endif; ?>
+                <?php if (!empty($u['private_file_id'])): ?>
+                  <div class="small">📎 <a href="/obligations/attachment.php?comment_id=<?= (int)$u['id'] ?>"><?=h($u['original_filename'] ?? 'Attachment')?></a></div>
+                <?php endif; ?>
+              <?php endif; ?>
+            </td>
             <td style="text-align:right;">
-              <form method="post" action="/obligations/completion_remove_eval.php" onsubmit="return confirm('Remove this history entry? The schedule will be recomputed.');" data-skip-unsaved-warning>
-                <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
-                <input type="hidden" name="completion_id" value="<?= (int)$c['id'] ?>">
-                <input type="hidden" name="obligation_id" value="<?= (int)$obligationId ?>">
-                <button class="button small" type="submit">Remove</button>
-              </form>
+              <?php if ($u['kind'] === 'completion'): ?>
+                <form method="post" action="/obligations/completion_remove_eval.php" onsubmit="return confirm('Remove this completion? The schedule will be recomputed.');" data-skip-unsaved-warning>
+                  <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
+                  <input type="hidden" name="completion_id" value="<?= (int)$u['id'] ?>">
+                  <input type="hidden" name="obligation_id" value="<?= (int)$obligationId ?>">
+                  <button class="button small" type="submit">Remove</button>
+                </form>
+              <?php else: ?>
+                <form method="post" action="/obligations/comment_remove_eval.php" onsubmit="return confirm('Remove this update?<?= !empty($u['completion_id']) ? ' It marked the obligation complete — the completion will be removed and the schedule recomputed.' : '' ?><?= !empty($u['private_file_id']) ? ' Its attachment will be permanently deleted.' : '' ?>');" data-skip-unsaved-warning>
+                  <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
+                  <input type="hidden" name="comment_id" value="<?= (int)$u['id'] ?>">
+                  <input type="hidden" name="obligation_id" value="<?= (int)$obligationId ?>">
+                  <button class="button small" type="submit">Remove</button>
+                </form>
+              <?php endif; ?>
             </td>
           </tr>
         <?php endforeach; ?>
@@ -183,5 +214,29 @@ header_html('Edit ' . $obligation['title']);
     <button class="danger" type="submit">Delete Obligation</button>
   </form>
 </div>
+
+<script>
+  (function(){
+    // The completed-on date only applies when "Mark complete" is checked
+    var completed = document.getElementById('updateCompleted');
+    var completedOn = document.getElementById('updateCompletedOn');
+    if (completed && completedOn) {
+      function sync() { completedOn.disabled = !completed.checked; }
+      completed.addEventListener('change', sync);
+      sync();
+    }
+
+    // Double-click protection for the update form (it may upload a file)
+    var form = document.getElementById('updateForm');
+    var btn = document.getElementById('updateBtn');
+    if (form && btn) {
+      form.addEventListener('submit', function(e) {
+        if (btn.disabled) { e.preventDefault(); return; }
+        btn.disabled = true;
+        btn.textContent = 'Saving...';
+      });
+    }
+  })();
+</script>
 
 <?php footer_html(); ?>
