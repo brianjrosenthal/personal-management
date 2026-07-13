@@ -670,6 +670,20 @@ class ObligationManagement {
         }
     }
 
+    // Replace an obligation's linked objects (from the Edit Linked Objects
+    // modal). $links: ['assets' => [ids], 'documents' => [ids], ...] — only
+    // the keys present are touched.
+    public static function updateLinks(?UserContext $ctx, int $obligationId, array $links): void {
+        self::assertLoggedIn($ctx);
+        if (!self::getObligation($obligationId)) {
+            throw new InvalidArgumentException('Obligation not found.');
+        }
+        self::replaceLinks($obligationId, $links);
+        self::log('obligation.links_update', $obligationId, [
+            'counts' => array_map(fn($ids) => count((array)$ids), $links),
+        ]);
+    }
+
     // Linked objects with names, for display: returns
     // ['assets' => rows, 'documents' => rows, 'policies' => rows, 'contacts' => rows]
     public static function getLinkedObjects(int $obligationId): array {

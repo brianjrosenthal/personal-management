@@ -3,10 +3,6 @@
 require_once __DIR__ . '/../partials.php';
 require_once __DIR__ . '/../lib/ObligationManagement.php';
 require_once __DIR__ . '/../lib/UserManagement.php';
-require_once __DIR__ . '/../lib/AssetManagement.php';
-require_once __DIR__ . '/../lib/DocumentManagement.php';
-require_once __DIR__ . '/../lib/InsurancePolicyManagement.php';
-require_once __DIR__ . '/../lib/ContactManagement.php';
 require_once __DIR__ . '/form_fields.php';
 Application::init();
 require_login();
@@ -21,23 +17,13 @@ $values = $form + [
     'recurrence_interval' => '1',
     'reminder_lead_days' => '7',
     'is_active' => 1,
-    'linked_asset_ids' => (array)($form['link_assets'] ?? []),
-    'linked_document_ids' => (array)($form['link_documents'] ?? []),
-    'linked_policy_ids' => (array)($form['link_policies'] ?? []),
-    'linked_contact_ids' => (array)($form['link_contacts'] ?? []),
 ];
 // Repopulated forms carry is_active explicitly; a fresh form defaults to active
 if (!empty($form) && empty($form['is_active'])) {
     $values['is_active'] = 0;
 }
 
-$opts = [
-    'users' => UserManagement::listUsers(),
-    'assets' => AssetManagement::listAssets(),
-    'documents' => DocumentManagement::listDocuments(),
-    'policies' => InsurancePolicyManagement::listPolicies(),
-    'contacts' => ContactManagement::listContacts(),
-];
+$opts = ['users' => UserManagement::listUsers()];
 
 header_html('Add Obligation');
 ?>

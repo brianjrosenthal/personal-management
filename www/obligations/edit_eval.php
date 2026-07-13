@@ -22,12 +22,9 @@ if ($id <= 0 || !ObligationManagement::getObligation($id)) {
 
 try {
     $ctx = UserContext::getLoggedInUserContext();
-    ObligationManagement::updateObligation(
-        $ctx,
-        $id,
-        obligation_data_from_post($_POST),
-        obligation_links_from_post($_POST)
-    );
+    // Links are managed separately via the Edit Linked Objects modal
+    // (obligations/links_eval.php); the main form leaves them untouched.
+    ObligationManagement::updateObligation($ctx, $id, obligation_data_from_post($_POST));
     $_SESSION['success'] = 'Obligation updated.';
     header('Location: /obligations/edit.php?id=' . $id);
     exit;

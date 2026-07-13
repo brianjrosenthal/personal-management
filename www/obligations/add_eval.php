@@ -15,12 +15,8 @@ require_csrf();
 
 try {
     $ctx = UserContext::getLoggedInUserContext();
-    $id = ObligationManagement::createObligation(
-        $ctx,
-        obligation_data_from_post($_POST),
-        obligation_links_from_post($_POST)
-    );
-    $_SESSION['success'] = 'Obligation created.';
+    $id = ObligationManagement::createObligation($ctx, obligation_data_from_post($_POST));
+    $_SESSION['success'] = 'Obligation created. You can link assets, documents, policies, and contacts below.';
     header('Location: /obligations/edit.php?id=' . $id);
     exit;
 } catch (Throwable $e) {

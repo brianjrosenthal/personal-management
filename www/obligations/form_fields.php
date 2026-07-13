@@ -5,8 +5,7 @@
 
 /**
  * @param array $v     Current field values (raw strings; annual_month/annual_day split out)
- * @param array $opts  ['users' => rows, 'assets' => rows, 'documents' => rows,
- *                      'policies' => rows, 'contacts' => rows]
+ * @param array $opts  ['users' => rows]
  */
 function render_obligation_form_fields(array $v, array $opts): void {
     $users = $opts['users'] ?? [];
@@ -128,30 +127,6 @@ function render_obligation_form_fields(array $v, array $opts): void {
       </label>
     </div>
 
-    <h3>Linked Objects</h3>
-    <p class="small">Attach the records needed to complete this obligation (hold Cmd/Ctrl to select multiple).</p>
-    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;">
-      <?php
-        $linkGroups = [
-            ['label' => 'Household assets', 'name' => 'link_assets', 'rows' => $opts['assets'] ?? [], 'selected' => $v['linked_asset_ids'] ?? [], 'nameKey' => 'name'],
-            ['label' => 'Documents', 'name' => 'link_documents', 'rows' => $opts['documents'] ?? [], 'selected' => $v['linked_document_ids'] ?? [], 'nameKey' => 'title'],
-            ['label' => 'Insurance policies', 'name' => 'link_policies', 'rows' => $opts['policies'] ?? [], 'selected' => $v['linked_policy_ids'] ?? [], 'nameKey' => 'name'],
-            ['label' => 'Contacts', 'name' => 'link_contacts', 'rows' => $opts['contacts'] ?? [], 'selected' => $v['linked_contact_ids'] ?? [], 'nameKey' => 'name'],
-        ];
-      ?>
-      <?php foreach ($linkGroups as $g): ?>
-        <label><?=h($g['label'])?>
-          <select name="<?=h($g['name'])?>[]" multiple size="4">
-            <?php foreach ($g['rows'] as $row): ?>
-              <option value="<?= (int)$row['id'] ?>" <?= in_array((int)$row['id'], array_map('intval', (array)$g['selected']), true) ? 'selected' : '' ?>>
-                <?=h($row[$g['nameKey']])?>
-              </option>
-            <?php endforeach; ?>
-          </select>
-        </label>
-      <?php endforeach; ?>
-    </div>
-
     <script>
       (function(){
         // Show only the schedule fields relevant to the chosen recurrence type
@@ -192,7 +167,9 @@ function obligation_data_from_post(array $post): array {
     return $data;
 }
 
-// Links arrays from a POST payload, in the shape ObligationManagement expects.
+// Links arrays from a POST payload (the Edit Linked Objects modal), in the
+// shape ObligationManagement expects. All four keys are always present, so a
+// fully-deselected type clears its links.
 function obligation_links_from_post(array $post): array {
     return [
         'assets' => (array)($post['link_assets'] ?? []),

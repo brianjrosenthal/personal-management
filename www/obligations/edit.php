@@ -9,6 +9,7 @@ require_once __DIR__ . '/../lib/DocumentManagement.php';
 require_once __DIR__ . '/../lib/InsurancePolicyManagement.php';
 require_once __DIR__ . '/../lib/ContactManagement.php';
 require_once __DIR__ . '/form_fields.php';
+require_once __DIR__ . '/linked_objects_fragment.php';
 Application::init();
 require_login();
 
@@ -30,12 +31,7 @@ $form = $_SESSION['form_data'] ?? [];
 unset($_SESSION['success'], $_SESSION['error'], $_SESSION['form_data']);
 
 if (!empty($form)) {
-    $values = $form + [
-        'linked_asset_ids' => (array)($form['link_assets'] ?? []),
-        'linked_document_ids' => (array)($form['link_documents'] ?? []),
-        'linked_policy_ids' => (array)($form['link_policies'] ?? []),
-        'linked_contact_ids' => (array)($form['link_contacts'] ?? []),
-    ];
+    $values = $form;
     if (empty($form['is_active'])) $values['is_active'] = 0;
 } else {
     $values = $obligation;
@@ -123,31 +119,52 @@ header_html('Edit ' . $obligation['title']);
   </form>
 </div>
 
-<?php if (array_filter($linked)): ?>
 <div class="card">
-  <h3>Linked Records</h3>
-  <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;">
-    <?php
-      $linkViews = [
-        'assets' => ['Household assets', '/assets/edit.php?id='],
-        'documents' => ['Documents', '/documents/edit.php?id='],
-        'policies' => ['Insurance policies', '/insurance/edit.php?id='],
-        'contacts' => ['Contacts', '/contacts/edit.php?id='],
-      ];
-    ?>
-    <?php foreach ($linkViews as $key => [$label, $urlPrefix]): ?>
-      <?php if (!empty($linked[$key])): ?>
-        <div>
-          <strong><?=h($label)?></strong>
-          <?php foreach ($linked[$key] as $row): ?>
-            <div><a href="<?=h($urlPrefix . (int)$row['id'])?>"><?=h($row['name'])?></a></div>
-          <?php endforeach; ?>
-        </div>
-      <?php endif; ?>
-    <?php endforeach; ?>
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+    <h3>Linked Objects</h3>
+    <button type="button" class="button small" id="editLinksBtn">Edit Linked Objects</button>
+  </div>
+  <div id="linkedObjectsList"><?= render_linked_objects_list($linked) ?></div>
+</div>
+
+<!-- Edit Linked Objects modal: saves via AJAX to obligations/links_eval.php -->
+<div class="modal hidden" id="linksModal" role="dialog" aria-modal="true" aria-labelledby="linksModalTitle">
+  <div class="modal-content" style="max-width:720px;">
+    <button class="close" type="button" id="linksModalClose" aria-label="Close">&times;</button>
+    <h3 id="linksModalTitle">Edit Linked Objects</h3>
+    <p class="small">Attach the records needed to complete this obligation (hold Cmd/Ctrl to select multiple).</p>
+    <p class="error hidden" id="linksModalError"></p>
+    <form id="linksForm" class="stack">
+      <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
+      <input type="hidden" name="obligation_id" value="<?= (int)$obligationId ?>">
+      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;">
+        <?php
+          $modalLinkGroups = [
+              ['label' => 'Household assets', 'name' => 'link_assets', 'rows' => $opts['assets'], 'selected' => $obligation['linked_asset_ids'], 'nameKey' => 'name'],
+              ['label' => 'Documents', 'name' => 'link_documents', 'rows' => $opts['documents'], 'selected' => $obligation['linked_document_ids'], 'nameKey' => 'title'],
+              ['label' => 'Insurance policies', 'name' => 'link_policies', 'rows' => $opts['policies'], 'selected' => $obligation['linked_policy_ids'], 'nameKey' => 'name'],
+              ['label' => 'Contacts', 'name' => 'link_contacts', 'rows' => $opts['contacts'], 'selected' => $obligation['linked_contact_ids'], 'nameKey' => 'name'],
+          ];
+        ?>
+        <?php foreach ($modalLinkGroups as $g): ?>
+          <label><?=h($g['label'])?>
+            <select name="<?=h($g['name'])?>[]" multiple size="5">
+              <?php foreach ($g['rows'] as $row): ?>
+                <option value="<?= (int)$row['id'] ?>" <?= in_array((int)$row['id'], $g['selected'], true) ? 'selected' : '' ?>>
+                  <?=h($row[$g['nameKey']])?>
+                </option>
+              <?php endforeach; ?>
+            </select>
+          </label>
+        <?php endforeach; ?>
+      </div>
+      <div class="actions">
+        <button class="primary" type="submit" id="linksSaveBtn">Save</button>
+        <button class="button" type="button" id="linksCancelBtn">Cancel</button>
+      </div>
+    </form>
   </div>
 </div>
-<?php endif; ?>
 
 <div class="card">
   <h3>History</h3>
@@ -236,6 +253,74 @@ header_html('Edit ' . $obligation['title']);
         btn.textContent = 'Saving...';
       });
     }
+
+    // Edit Linked Objects modal: opens over the page, saves via AJAX to
+    // links_eval.php, and swaps in the refreshed list fragment on success.
+    var linksModal = document.getElementById('linksModal');
+    var linksForm = document.getElementById('linksForm');
+    var linksError = document.getElementById('linksModalError');
+    var linksSaveBtn = document.getElementById('linksSaveBtn');
+    var linksSnapshot = [];
+
+    function linksSelects() {
+      return Array.prototype.slice.call(linksForm.querySelectorAll('select'));
+    }
+
+    function openLinksModal() {
+      // Snapshot selections so Cancel can restore them
+      linksSnapshot = linksSelects().map(function(sel) {
+        return Array.prototype.slice.call(sel.selectedOptions).map(function(o) { return o.value; });
+      });
+      linksError.classList.add('hidden');
+      linksModal.classList.remove('hidden');
+    }
+
+    function closeLinksModal(restore) {
+      if (restore) {
+        linksSelects().forEach(function(sel, i) {
+          Array.prototype.slice.call(sel.options).forEach(function(o) {
+            o.selected = linksSnapshot[i].indexOf(o.value) !== -1;
+          });
+        });
+      }
+      linksModal.classList.add('hidden');
+    }
+
+    document.getElementById('editLinksBtn').addEventListener('click', openLinksModal);
+    document.getElementById('linksModalClose').addEventListener('click', function() { closeLinksModal(true); });
+    document.getElementById('linksCancelBtn').addEventListener('click', function() { closeLinksModal(true); });
+    linksModal.addEventListener('click', function(e) { if (e.target === linksModal) closeLinksModal(true); });
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && !linksModal.classList.contains('hidden')) closeLinksModal(true);
+    });
+
+    linksForm.addEventListener('submit', function(e) {
+      e.preventDefault();
+      if (linksSaveBtn.disabled) return;
+      linksSaveBtn.disabled = true;
+      linksSaveBtn.textContent = 'Saving...';
+      linksError.classList.add('hidden');
+
+      fetch('/obligations/links_eval.php', { method: 'POST', body: new FormData(linksForm) })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.success) {
+            document.getElementById('linkedObjectsList').innerHTML = data.html;
+            closeLinksModal(false);
+          } else {
+            linksError.textContent = data.error || 'Failed to save linked objects.';
+            linksError.classList.remove('hidden');
+          }
+        })
+        .catch(function() {
+          linksError.textContent = 'Failed to save linked objects. Please try again.';
+          linksError.classList.remove('hidden');
+        })
+        .finally(function() {
+          linksSaveBtn.disabled = false;
+          linksSaveBtn.textContent = 'Save';
+        });
+    });
   })();
 </script>
 

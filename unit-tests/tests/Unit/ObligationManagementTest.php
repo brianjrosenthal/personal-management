@@ -294,6 +294,43 @@ final class ObligationManagementTest extends TestCase
         ]);
     }
 
+    public function testUpdateLinksStandalone(): void
+    {
+        $assetId = AssetManagement::createAsset($this->ctx, ['name' => 'Roof']);
+        $contactId = ContactManagement::createContact($this->ctx, ['name' => 'Roofer Co'], ['Contractor']);
+        $id = $this->createAnnual('06-01');
+
+        ObligationManagement::updateLinks($this->ctx, $id, ['assets' => [$assetId], 'contacts' => [$contactId]]);
+        $o = ObligationManagement::getObligation($id);
+        $this->assertSame([$assetId], $o['linked_asset_ids']);
+        $this->assertSame([$contactId], $o['linked_contact_ids']);
+
+        // Deselecting everything clears the provided types
+        ObligationManagement::updateLinks($this->ctx, $id, ['assets' => [], 'documents' => [], 'policies' => [], 'contacts' => []]);
+        $o = ObligationManagement::getObligation($id);
+        $this->assertSame([], $o['linked_asset_ids']);
+        $this->assertSame([], $o['linked_contact_ids']);
+    }
+
+    public function testMainFormUpdateLeavesLinksUntouched(): void
+    {
+        $assetId = AssetManagement::createAsset($this->ctx, ['name' => 'Boiler']);
+        $id = $this->createAnnual('06-01', ['title' => 'Service boiler']);
+        ObligationManagement::updateLinks($this->ctx, $id, ['assets' => [$assetId]]);
+
+        // The edit form saves without any links argument — links must survive
+        ObligationManagement::updateObligation($this->ctx, $id, [
+            'title' => 'Service boiler (renamed)',
+            'recurrence_type' => 'date_of_year',
+            'annual_month_day' => '06-01',
+            'is_active' => 1,
+        ]);
+
+        $o = ObligationManagement::getObligation($id);
+        $this->assertSame('Service boiler (renamed)', $o['title']);
+        $this->assertSame([$assetId], $o['linked_asset_ids']);
+    }
+
     // ===== Comments / updates =====
 
     public function testAddCommentAndListUpdates(): void
